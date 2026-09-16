@@ -4,6 +4,7 @@ import type { GoogleSheetsClient, GoogleSheetsDataSourceOptions } from "./types.
 import { GoogleSheetsSpreadsheetNotFoundError } from "./error.js";
 import { GoogleSheetsConsume } from "../client/index.js";
 import { GoogleSheetsDriver } from "./driver.js";
+import { GoogleSheetsMemoryCache } from "./cache.js";
 
 export function createGoogleSheetsDataSource(options: GoogleSheetsDataSourceOptions): DataSource
 {
@@ -22,6 +23,7 @@ export function createGoogleSheetsDataSource(options: GoogleSheetsDataSourceOpti
         client = new GoogleSheetsConsume({
             spreadsheetId: options.spreadsheetId,
             credentials: options.credentials,
+            cache: options.cache ?? new GoogleSheetsMemoryCache()
         });
     }
 

@@ -104,7 +104,7 @@ export class GoogleSheetsQueryInterpreter
 
         if (!selectMatch?.[1]) throw new GoogleSheetsParseError('Unable to parse SELECT clause.')
 
-        return selectMatch[1]
+        const selectColumns = selectMatch[1]
             .split(',')
             .map(
                 (expression) =>
@@ -124,6 +124,31 @@ export class GoogleSheetsQueryInterpreter
                             tableAlias: '',
                             column: literalMatch[1],
                             alias: literalMatch[2],
+                        };
+                    }
+
+                    /**
+                     * COUNT(DISTINCT(...))
+                     *
+                     * Example:
+                     *
+                     * COUNT(DISTINCT("Projects"."id" || '|;|' || "Projects"."title"))
+                     * AS "cnt"
+                     */
+
+                    const countDistinctMatch =
+                        normalizedExpression.match(
+                            /^COUNT\s*\(\s*DISTINCT\s*\(([\s\S]+)\)\s*\)\s+AS\s+"([^"]+)"$/i,
+                        );
+
+                    if (countDistinctMatch?.[1] && countDistinctMatch[2])
+                    {
+                        return {
+                            tableAlias: '',
+                            column: countDistinctMatch[1],
+                            alias: countDistinctMatch[2],
+                            aggregate: 'COUNT' as SelectColumn['aggregate'],
+                            distinct: true,
                         };
                     }
 
@@ -156,6 +181,7 @@ export class GoogleSheetsQueryInterpreter
                             tableAlias,
                             column: aggregateMatch[2],
                             alias: aggregateMatch[3],
+                            aggregate: aggregateMatch[1].toUpperCase() as SelectColumn['aggregate'],
                         };
                     }
 
@@ -215,6 +241,8 @@ export class GoogleSheetsQueryInterpreter
                     };
                 },
             );
+
+        return selectColumns
     }
 
     parseFrom(query: string): FromQuery
@@ -392,7 +420,49 @@ export class GoogleSheetsQueryInterpreter
 
         for (const expression of expressions)
         {
-            const match = expression.match(/^(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*([^)]+)\s*\)\s+AS\s+"([^"]+)"$/i);
+            /**
+         * COUNT(DISTINCT(...))
+         *
+         * Example:
+         *
+         * COUNT(DISTINCT(
+         *     "Projects"."id" || '|;|' ||
+         *     "Projects"."title" || '|;|' ||
+         *     ...
+         * )) AS "cnt"
+         */
+
+            const distinctMatch =
+                expression.match(
+                    /^(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*DISTINCT\s*\(([\s\S]+)\)\s*\)\s+AS\s+"([^"]+)"$/i,
+                );
+
+            if (distinctMatch?.[1] && distinctMatch[2] && distinctMatch[3])
+            {
+                aggregates.push({
+                    function: distinctMatch[1].toUpperCase() as AggregateFunction,
+                    argument: distinctMatch[2].trim(),
+                    alias: distinctMatch[3],
+                    distinct: true,
+                });
+
+                continue;
+            }
+
+            /**
+                   * Normal aggregate.
+                   *
+                   * COUNT(*)
+                   * COUNT(1)
+                   * COUNT("Projects"."id")
+                   * SUM("Projects"."age")
+                   * etc.
+                   */
+
+            const match =
+                expression.match(
+                    /^(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*([\s\S]+?)\s*\)\s+AS\s+"([^"]+)"$/i,
+                );
 
             if (!match?.[1] || !match[2] || !match[3]) continue;
 
@@ -400,6 +470,7 @@ export class GoogleSheetsQueryInterpreter
                 function: match[1].toUpperCase() as AggregateFunction,
                 argument: match[2].trim(),
                 alias: match[3],
+                distinct: false,
             });
         }
 
@@ -539,6 +610,37 @@ export class GoogleSheetsQueryInterpreter
                     operator: 'ANY',
                     parameters: [anyMatch[3]],
                 },
+            };
+        }
+
+        const castLikeMatch =
+            normalizedExpression.match(
+                /^CAST\(\s*(?:"([^"]+)"\.)?"([^"]+)"\s+AS\s+(?:CHAR|TEXT)\s*\)\s+(NOT\s+)?(I?LIKE)\s+(:[a-zA-Z_][a-zA-Z0-9_]*)$/i,
+            );
+
+        if (castLikeMatch?.[2] && castLikeMatch?.[4] && castLikeMatch?.[5])
+        {
+            const likeOperator = castLikeMatch[4].toUpperCase();
+            let operator: WhereOperator;
+
+            if (likeOperator === 'LIKE')
+            {
+                operator = castLikeMatch[3] ? 'NOT LIKE' : 'LIKE';
+            } else
+            {
+                operator = castLikeMatch[3] ? 'NOT ILIKE' : 'ILIKE';
+            }
+
+            return {
+                type: 'condition',
+                condition: {
+                    tableAlias: castLikeMatch[1] ?? '',
+                    column: castLikeMatch[2],
+                    operator,
+                    parameters: [
+                        castLikeMatch[5],
+                    ],
+                }
             };
         }
 
@@ -695,18 +797,78 @@ export class GoogleSheetsQueryInterpreter
         return expression.replace(/^"|"$/g, '');
     }
 
+    private evaluateSelectExpression(row: Record<string, unknown>, expression: string): unknown
+    {
+        const parts = expression.split(/\s*\|\|\s*/).map((part) => part.trim());
+
+        if (parts.length === 1)
+        {
+            const part = parts[0]!;
+
+            const columnMatch = part.match(/^"?([^".]+)"?\."?([^".]+)"?$/);
+
+            if (columnMatch?.[1] && columnMatch[2])
+            {
+                const tableRow = row[columnMatch[1]];
+
+                if (tableRow && typeof tableRow === 'object')
+                {
+                    return (tableRow as Record<string, unknown>)[columnMatch[2]];
+                }
+
+                return undefined;
+            }
+
+            const literalMatch = part.match(/^'(.*)'$/s);
+
+            if (literalMatch) return literalMatch[1];
+
+            return undefined;
+        }
+
+        const values = parts.map((part) => this.evaluateSelectExpression(row, part));
+
+        /**
+         * SQL concatenation:
+         *
+         * 'foo' || NULL
+         * => NULL
+         */
+        if (values.some((value) => value === null || value === undefined)) return null;
+
+        return values.map((value) => String(value)).join('');
+    }
+
+    private evaluateDistinctExpression(row: Record<string, unknown>, expression: string): unknown[]
+    {
+        return expression.split(/\s*\|\|\s*/).map((part) => this.evaluateSelectExpression(row, part.trim()));
+    }
+
     evaluateAggregate(rows: Record<string, unknown>[], aggregate: AggregateColumn): number | null
     {
         if (aggregate.function === 'COUNT')
         {
             /**
              * COUNT(*) / COUNT(1)
-             *
-             * TypeORM uses COUNT(1) for repository.count().
-             * Both forms count rows, not a column value.
              */
+            if (aggregate.argument === '*' || /^\d+$/.test(aggregate.argument))
+            {
+                if (!aggregate.distinct) return rows.length;
+            }
 
-            if (aggregate.argument === '*' || /^\d+$/.test(aggregate.argument)) return rows.length;
+            /**
+             * COUNT(DISTINCT expression)
+             */
+            if (aggregate.distinct)
+            {
+                const values = rows.map((row) =>
+                    this.evaluateDistinctExpression(row, aggregate.argument))
+                    .filter((value) => value !== null && value !== undefined);
+
+                const distinctValues = new Set(values.map((value) => JSON.stringify(value)));
+
+                return distinctValues.size;
+            }
         }
 
         const columnMatch = aggregate.argument.match(/^"?([^".]+)"?\."?([^".]+)"?$/);
@@ -719,7 +881,10 @@ export class GoogleSheetsQueryInterpreter
             {
                 const tableRow = row[tableAlias];
 
-                if (tableRow && typeof tableRow === 'object') return (tableRow as Record<string, unknown>)[column];
+                if (tableRow && typeof tableRow === 'object')
+                {
+                    return (tableRow as Record<string, unknown>)[column];
+                }
 
                 return undefined;
             }
@@ -727,15 +892,14 @@ export class GoogleSheetsQueryInterpreter
             return row[column];
         };
 
-        const values = rows
-            .map((row) => getValue(row))
+        const values = rows.map((row) => getValue(row))
             .filter((value): value is string | number => value !== null && value !== undefined);
 
         if (aggregate.function === 'COUNT') return values.length;
+
         if (values.length === 0) return null;
 
-        const numericValues = values
-            .map((value) => typeof value === 'number' ? value : Number(value))
+        const numericValues = values.map((value) => typeof value === 'number' ? value : Number(value))
             .filter((value) => Number.isFinite(value));
 
         if (numericValues.length === 0) return null;
@@ -746,7 +910,10 @@ export class GoogleSheetsQueryInterpreter
             case 'AVG': return numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
             case 'MIN': return Math.min(...numericValues);
             case 'MAX': return Math.max(...numericValues);
-            default: throw new GoogleSheetsUnsupportedOperationError(`Unsupported aggregate function: ${aggregate.function}`)
+            default:
+                throw new GoogleSheetsUnsupportedOperationError(
+                    `Unsupported aggregate function: ${aggregate.function}`,
+                );
         }
     }
 

@@ -28,6 +28,7 @@ export interface GoogleSheetsConsumeOptions
 {
     spreadsheetId: string;
     credentials: GoogleSheetsCredentials;
+    cache?: GoogleSheetsCache;
 }
 
 export interface GoogleSheetsDataSourceWithClientOptions extends GoogleSheetsDataSourceOptionsBase
@@ -39,6 +40,7 @@ export interface GoogleSheetsDataSourceWithCredentialsOptions extends GoogleShee
 {
     spreadsheetId: string;
     credentials: GoogleSheetsCredentials;
+    cache?: GoogleSheetsCache;
 
     client?: GoogleSheetsClient;
 }
@@ -111,3 +113,34 @@ export interface GoogleSheetsSheetMetadata
 }
 
 export const DEFAULT_MAX_RETRIES = 3;
+
+export interface GoogleSheetsCacheEntry<T>
+{
+    value: T;
+    expiresAt: number;
+}
+
+export interface GoogleSheetsMemoryCacheOptions
+{
+    ttl?: number;
+}
+
+export interface GoogleSheetsCache
+{
+    getRows(sheetName: string): GoogleSheetsRow[] | undefined;
+    setRows(sheetName: string, rows: GoogleSheetsRow[]): void;
+    invalidateRows(sheetName: string): void;
+
+    getHeaders(sheetName: string): string[] | undefined;
+    setHeaders(sheetName: string, headers: string[]): void;
+    invalidateHeaders(sheetName: string): void;
+
+    getMetadata(sheetName: string): GoogleSheetsSheetMetadata | null | undefined;
+    setMetadata(
+        sheetName: string,
+        metadata: GoogleSheetsSheetMetadata | null,
+    ): void;
+    invalidateMetadata(sheetName: string): void;
+
+    clear(): void;
+}

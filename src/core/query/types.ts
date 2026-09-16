@@ -27,6 +27,8 @@ export interface SelectColumn
     tableAlias: string;
     column: string;
     alias: string;
+    aggregate?: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+    distinct?: boolean;
 }
 
 export interface FromQuery
@@ -135,6 +137,7 @@ export interface AggregateColumn
     function: AggregateFunction;
     argument: string;
     alias: string;
+    distinct?: boolean;
 }
 
 export type OrderDirection =

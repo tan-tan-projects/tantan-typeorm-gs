@@ -1,0 +1,38 @@
+# source
+src/
+
+# tests
+test/
+tests/
+
+# development files
+.vscode/
+.idea/
+*.code-workspace
+
+# TypeScript config
+tsconfig.json
+tsconfig.*.json
+
+# package manager files
+bun.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# git
+.git/
+.gitignore
+.gitattributes
+
+# development / CI
+.github/
+
+# coverage
+coverage/
+*.lcov
+
+# temporary files
+*.log
+*.tmp
+*.temp

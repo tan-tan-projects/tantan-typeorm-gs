@@ -2,6 +2,7 @@ import { google, type sheets_v4 } from "googleapis";
 import
 {
     DEFAULT_MAX_RETRIES,
+    type GoogleSheetsCache,
     type GoogleSheetsClient,
     type GoogleSheetsConsumeOptions,
     type GoogleSheetsRow,
@@ -16,6 +17,7 @@ import
     GoogleSheetsWorksheetNotFoundError
 } from "../core/error.js";
 import { buildWorksheetRange } from "../core/utils.js";
+import { GoogleSheetsMemoryCache } from "../core/cache.js";
 
 export class GoogleSheetsConsume implements GoogleSheetsClient 
 {
@@ -23,8 +25,7 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
     private readonly clientEmail: string;
     private readonly privateKey: string;
     private sheets?: sheets_v4.Sheets;
-    private readonly metadataCache = new Map<string, GoogleSheetsSheetMetadata | null>();
-    private readonly headersCache = new Map<string, string[]>();
+    private readonly cache: GoogleSheetsCache;
 
     constructor(
         options: GoogleSheetsConsumeOptions,
@@ -33,6 +34,7 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
         this.spreadsheetId = options.spreadsheetId;
         this.clientEmail = options.credentials.clientEmail;
         this.privateKey = options.credentials.privateKey;
+        this.cache = options.cache ?? new GoogleSheetsMemoryCache();
     }
 
     async connect(): Promise<void>
@@ -40,7 +42,7 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
         const auth = new google.auth.GoogleAuth({
             credentials: {
                 client_email: this.clientEmail,
-                private_key: this.privateKey,
+                private_key: this.privateKey.replace(/\\n/g, '\n'),
             },
 
             scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -52,6 +54,8 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
     async disconnect(): Promise<void>
     {
         this.sheets = undefined;
+
+        this.cache.clear();
     }
 
     async hasSheet(sheetName: string): Promise<boolean>
@@ -85,8 +89,9 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
             },
         });
 
-        this.metadataCache.delete(sheetName);
-        this.headersCache.delete(sheetName);
+        this.cache.invalidateMetadata(sheetName);
+        this.cache.invalidateHeaders(sheetName);
+        this.cache.invalidateRows(sheetName);
     }
 
     async getSheetMetadata(sheetName: string): Promise<GoogleSheetsSheetMetadata | null>
@@ -96,7 +101,9 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
             throw new GoogleSheetsGenaralError('GoogleSheetsApiClient is not connected.');
         }
 
-        if (this.metadataCache.has(sheetName)) return this.metadataCache.get(sheetName) ?? null;
+        const cachedMetadata = this.cache.getMetadata(sheetName);
+
+        if (cachedMetadata !== undefined) return cachedMetadata;
 
         const response = await this.sheets.spreadsheets.get({
             spreadsheetId: this.spreadsheetId,
@@ -107,7 +114,7 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
 
         if (!sheet?.properties?.sheetId || !sheet.properties.title)
         {
-            this.metadataCache.set(sheetName, null);
+            this.cache.setMetadata(sheetName, null);
 
             return null;
         }
@@ -117,7 +124,7 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
             title: sheet.properties.title,
         };
 
-        this.metadataCache.set(sheetName, metadata);
+        this.cache.setMetadata(sheetName, metadata);
 
         return metadata;
     }
@@ -129,7 +136,7 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
             throw new GoogleSheetsGenaralError('GoogleSheetsApiClient is not connected.');
         }
 
-        const cachedHeaders = this.headersCache.get(sheetName);
+        const cachedHeaders = this.cache.getHeaders(sheetName);
 
         if (cachedHeaders) return [...cachedHeaders];
 
@@ -143,7 +150,7 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
 
         const headers = values.map((value) => String(value));
 
-        this.headersCache.set(sheetName, [...headers]);
+        this.cache.setHeaders(sheetName, headers);
 
         return headers;
     }
@@ -166,7 +173,8 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
             },
         });
 
-        this.headersCache.delete(sheetName);
+        this.cache.invalidateHeaders(sheetName);
+        this.cache.invalidateRows(sheetName);
     }
 
     async renameSheet(oldSheetName: string, newSheetName: string): Promise<void>
@@ -202,15 +210,13 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
             },
         });
 
-        const metadata = this.metadataCache.get(oldSheetName);
+        this.cache.invalidateMetadata(oldSheetName);
+        this.cache.invalidateHeaders(oldSheetName);
+        this.cache.invalidateRows(oldSheetName);
 
-        this.metadataCache.delete(oldSheetName);
-        this.headersCache.delete(oldSheetName);
-
-        if (metadata !== undefined)
-        {
-            this.metadataCache.set(newSheetName, metadata === null ? null : { ...metadata, title: newSheetName });
-        }
+        this.cache.invalidateMetadata(newSheetName);
+        this.cache.invalidateHeaders(newSheetName);
+        this.cache.invalidateRows(newSheetName);
     }
 
     async deleteSheet(sheetName: string): Promise<void>
@@ -238,8 +244,9 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
             },
         });
 
-        this.metadataCache.delete(sheetName);
-        this.headersCache.delete(sheetName);
+        this.cache.invalidateMetadata(sheetName);
+        this.cache.invalidateHeaders(sheetName);
+        this.cache.invalidateRows(sheetName);
     }
 
     async getRows(sheetName: string): Promise<GoogleSheetsRow[]>
@@ -248,6 +255,9 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
         {
             throw new GoogleSheetsGenaralError('GoogleSheetsApiClient is not connected.');
         }
+
+        const cachedRows = this.cache.getRows(sheetName);
+        if (cachedRows) return cachedRows.map(row => ({ ...row }));
 
         const response =
             await this.withRetry(
@@ -259,15 +269,23 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
 
         const values = response.data.values ?? [];
 
-        if (values.length === 0) return [];
+        if (values.length === 0)
+        {
+            this.cache.setRows(sheetName, []);
+            return [];
+        }
 
         const headerRow = values[0];
 
-        if (!headerRow) return [];
+        if (!headerRow)
+        {
+            this.cache.setRows(sheetName, []);
+            return [];
+        }
 
         const headers = headerRow.map((header) => String(header));
 
-        return values.slice(1).map((values) =>
+        const rows = values.slice(1).map((values) =>
         {
             const row: GoogleSheetsRow = {};
 
@@ -282,6 +300,10 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
 
             return row;
         });
+
+        this.cache.setRows(sheetName, rows);
+
+        return rows.map(row => ({ ...row }));
     }
 
     async insertRows(sheetName: string, rows: GoogleSheetsRow[]): Promise<void>
@@ -305,6 +327,8 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
                 values,
             },
         });
+
+        this.cache.invalidateRows(sheetName);
     }
 
     async updateRows(
@@ -404,6 +428,8 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
             },
         });
 
+        this.cache.invalidateRows(sheetName);
+
         return matchingRows.length;
     }
 
@@ -486,6 +512,8 @@ export class GoogleSheetsConsume implements GoogleSheetsClient
                 ),
             },
         });
+
+        this.cache.invalidateRows(sheetName);
 
         return rowNumbers.length;
     }

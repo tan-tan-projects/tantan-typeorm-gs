@@ -2,30 +2,30 @@
 
 ### Getting Started
 
-- [Installation](docs/installation.md)
-- [Google Cloud Setup](docs/google-cloud.md)
-- [Authentication](docs/authentication.md)
-- [Configuration](docs/configuration.md)
+- [Installation](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/installation.md)
+- [Google Cloud Setup](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/google-cloud.md)
+- [Authentication](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/authentication.md)
+- [Configuration](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/configuration.md)
 
 ### Usage
 
-- [Entity Definition](docs/entities.md)
-- [CRUD](docs/crud.md)
-- [Find Options](docs/find-options.md)
-- [Pagination](docs/pagination.md)
-- [Sorting](docs/sorting.md)
-- [Synchronization](docs/synchronization.md)
-- [Custom Client](docs/custom-client.md)
+- [Entity Definition](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/entities.md)
+- [CRUD](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/crud.md)
+- [Find Options](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/find-options.md)
+- [Pagination](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/pagination.md)
+- [Sorting](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/sorting.md)
+- [Synchronization](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/synchronization.md)
+- [Custom Client](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/custom-client.md)
 
 ### Reference
 
-- [Supported Features](docs/supported-features.md)
-- [Limitations](docs/limitations.md)
-- [Performance Considerations](docs/performance.md)
-- [Security](docs/security.md)
+- [Supported Features](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/supported-features.md)
+- [Limitations](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/limitations.md)
+- [Performance Considerations](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/performance.md)
+- [Security](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/security.md)
 
 ### Testing & Development
 
-- [Integration Testing](docs/integration-testing.md)
-- [Development Guide](docs/development.md)
-- [Contribution Guide](docs/contributing.md)
+- [Integration Testing](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/integration-testing.md)
+- [Development Guide](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/development.md)
+- [Contribution Guide](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/contributing.md)

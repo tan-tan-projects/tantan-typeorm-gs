@@ -1,6 +1,6 @@
 {
   "name": "tantan-typeorm-gs",
-  "version": "1.0.1",
+  "version": "1.0.4-beta.0",
   "description": "A TypeORM-compatible driver for using Google Sheets as a data source.",
   "keywords": [
     "typeorm",
@@ -21,7 +21,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
@@ -31,13 +31,14 @@
     "test:run": "bun test"
   },
   "dependencies": {
-    "googleapis": "^178.0.0",
-    "typeorm": "^1.1.1"
+    "googleapis": "^178.0.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typeorm": "^1.1.1"
   },
   "peerDependencies": {
+    "typeorm": "^1.1.1",
     "typescript": "^7"
   }
 }
