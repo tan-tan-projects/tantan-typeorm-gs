@@ -18,12 +18,11 @@ export class GoogleSheetsSchemaBuilder implements SchemaBuilder
         {
             if (!metadata.synchronize) continue;
 
-            const sheetName =
-                this.driver.buildTableName(
-                    metadata.tableName,
-                    metadata.schema,
-                    metadata.database,
-                );
+            const sheetName = this.driver.buildTableName(
+                metadata.tableName,
+                metadata.schema,
+                metadata.database,
+            );
 
             const exists = await this.driver.client.hasSheet(sheetName);
 

@@ -43,7 +43,8 @@ export class GoogleSheetsDriver implements Driver
         'boolean',
         'date',
         'uuid',
-        'int'
+        'int',
+        'enum'
     ];
     supportedIsolationLevels: readonly IsolationLevel[] = [];
     supportedUpsertTypes: UpsertType[] = [];
@@ -298,6 +299,11 @@ export class GoogleSheetsDriver implements Driver
         if (column.type === 'uuid')
         {
             return 'uuid';
+        }
+
+        if (column.type === 'enum')
+        {
+            return 'enum';
         }
 
         return String(column.type ?? 'string');
