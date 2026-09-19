@@ -910,40 +910,103 @@ export class GoogleSheetsQueryInterpreter
         }
     }
 
+    private compareOrderedValues(left: unknown, right: unknown): number | null
+    {
+        if (left === null || left === undefined || right === null || right === undefined)
+        {
+            return null;
+        }
+
+        if (left instanceof Date && right instanceof Date)
+        {
+            return left.getTime() - right.getTime();
+        }
+
+        if (left instanceof Date && typeof right === 'string')
+        {
+            const rightDate = new Date(right);
+
+            if (Number.isNaN(rightDate.getTime())) return null;
+
+            return left.getTime() - rightDate.getTime();
+        }
+
+        if (typeof left === 'string' && right instanceof Date)
+        {
+            const leftDate = new Date(left);
+
+            if (Number.isNaN(leftDate.getTime())) return null;
+
+            return leftDate.getTime() - right.getTime();
+        }
+
+        if (typeof left === 'number' && typeof right === 'number')
+        {
+            return left - right;
+        }
+
+        if (typeof left === 'number' && typeof right === 'string')
+        {
+            const rightNumber = Number(right);
+
+            if (Number.isNaN(rightNumber)) return null;
+
+            return left - rightNumber;
+        }
+
+        if (typeof left === 'string' && typeof right === 'number')
+        {
+            const leftNumber = Number(left);
+
+            if (Number.isNaN(leftNumber)) return null;
+
+            return leftNumber - right;
+        }
+
+        if (typeof left === 'string' && typeof right === 'string')
+        {
+            return left.localeCompare(right);
+        }
+
+        return null;
+    }
+
     evaluateWhere(value: unknown, operator: WhereOperator, parameters: unknown[]): boolean
     {
+        const parameter = parameters[0];
+
         switch (operator)
         {
-            case '=': return this.compareValues(value, parameters[0]);
+            case '=': return this.compareValues(value, parameter);
             case '!=':
             case '<>':
-                return !this.compareValues(value, parameters[0]);
+                return !this.compareValues(value, parameter);
             case '>':
-                return value !== undefined &&
-                    value !== null &&
-                    parameters[0] !== undefined &&
-                    parameters[0] !== null &&
-                    value > parameters[0];
+                {
+                    const comparison = this.compareOrderedValues(value, parameter);
+
+                    return comparison !== null && comparison > 0;
+                }
             case '>=':
-                return value !== undefined &&
-                    value !== null &&
-                    parameters[0] !== undefined &&
-                    parameters[0] !== null &&
-                    value >= parameters[0];
+                {
+                    const comparison = this.compareOrderedValues(value, parameter);
+
+                    return comparison !== null && comparison >= 0;
+                }
             case '<':
-                return value !== undefined &&
-                    value !== null &&
-                    parameters[0] !== undefined &&
-                    parameters[0] !== null &&
-                    value < parameters[0];
+                {
+                    const comparison = this.compareOrderedValues(value, parameter);
+
+                    return comparison !== null && comparison < 0;
+                }
             case '<=':
-                return value !== undefined &&
-                    value !== null &&
-                    parameters[0] !== undefined &&
-                    parameters[0] !== null &&
-                    value <= parameters[0];
-            case 'IS NULL': return (value === null || value === undefined);
-            case 'IS NOT NULL': return (value !== null && value !== undefined);
+                {
+                    const comparison = this.compareOrderedValues(value, parameter);
+
+                    return comparison !== null && comparison <= 0;
+                }
+            case 'IS NULL': return value === null || value === undefined;
+            case 'IS NOT NULL': return value !== null && value !== undefined;
             case 'IN': return parameters.some((parameter) => this.compareValues(value, parameter));
             case 'NOT IN': return !parameters.some((parameter) => this.compareValues(value, parameter));
             case 'ANY':
@@ -952,24 +1015,28 @@ export class GoogleSheetsQueryInterpreter
 
                     if (!Array.isArray(values)) return false;
 
-                    return values.some(
-                        (parameter) => this.compareValues(value, parameter),
+                    return values.some((parameter) => this.compareValues(value, parameter));
+                }
+
+            case 'LIKE': return this.evaluateLike(value, parameter, false);
+            case 'NOT LIKE': return !this.evaluateLike(value, parameter, false);
+            case 'ILIKE': return this.evaluateLike(value, parameter, true);
+            case 'NOT ILIKE': return !this.evaluateLike(value, parameter, true);
+
+            case 'BETWEEN':
+                {
+                    const min = this.compareOrderedValues(value, parameters[0]);
+                    const max = this.compareOrderedValues(value, parameters[1]);
+
+                    return (
+                        min !== null &&
+                        max !== null &&
+                        min >= 0 &&
+                        max <= 0
                     );
                 }
-            case 'LIKE': return this.evaluateLike(value, parameters[0], false);
-            case 'NOT LIKE': return !this.evaluateLike(value, parameters[0], false);
-            case 'ILIKE': return this.evaluateLike(value, parameters[0], true);
-            case 'NOT ILIKE': return !this.evaluateLike(value, parameters[0], true);
-            case 'BETWEEN':
-                return value !== undefined &&
-                    value !== null &&
-                    parameters[0] !== undefined &&
-                    parameters[0] !== null &&
-                    parameters[1] !== undefined &&
-                    parameters[1] !== null &&
-                    value >= parameters[0] &&
-                    value <= parameters[1];
-            default: throw new GoogleSheetsUnsupportedOperationError(`Unsupported operator: ${operator}`)
+
+            default: throw new GoogleSheetsUnsupportedOperationError(`Unsupported operator: ${operator}`);
         }
     }
 
