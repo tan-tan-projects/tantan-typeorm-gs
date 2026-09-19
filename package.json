@@ -1,6 +1,6 @@
 {
   "name": "tantan-typeorm-gs",
-  "version": "1.0.5-beta.2",
+  "version": "1.0.5-beta.3",
   "description": "A TypeORM-compatible driver for using Google Sheets as a data source.",
   "repository": {
     "type": "git",
