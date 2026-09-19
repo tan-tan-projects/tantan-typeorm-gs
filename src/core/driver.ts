@@ -192,6 +192,62 @@ export class GoogleSheetsDriver implements Driver
             return Boolean(value);
         }
 
+        if ((column.type as unknown) === Object)
+        {
+            const metadata =
+                column as ColumnMetadata & {
+                    propertyType?: unknown;
+                };
+
+            if (
+                metadata.propertyType === String ||
+                metadata.propertyType === 'string'
+            )
+            {
+                return String(value);
+            }
+
+            if (
+                metadata.propertyType === Number ||
+                metadata.propertyType === 'number'
+            )
+            {
+                return Number(value);
+            }
+
+            if (
+                metadata.propertyType === Boolean ||
+                metadata.propertyType === 'boolean'
+            )
+            {
+                if (typeof value === 'boolean') return value;
+
+                if (typeof value === 'string')
+                {
+                    return value.toUpperCase() === 'TRUE';
+                }
+
+                return Boolean(value);
+            }
+
+            if (
+                metadata.propertyType === Date ||
+                metadata.propertyType === 'date'
+            )
+            {
+                if (value instanceof Date) return value;
+
+                const date = new Date(value);
+
+                if (!Number.isNaN(date.getTime()))
+                {
+                    return date;
+                }
+            }
+
+            return value;
+        }
+
         return value;
     }
 
@@ -210,7 +266,6 @@ export class GoogleSheetsDriver implements Driver
         if (column.type === Date || column.type === 'date') return 'date';
         if (column.type === 'uuid') return 'uuid';
         if (column.type === 'enum') return 'enum';
-        if ((column.type as unknown) === Object) return 'string';
 
         return String(column.type ?? 'string');
     }
