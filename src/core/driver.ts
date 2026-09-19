@@ -156,96 +156,40 @@ export class GoogleSheetsDriver implements Driver
 
     preparePersistentValue(value: any, column: ColumnMetadata)
     {
-        if (value === null || value === undefined)
+        if (value === null || value === undefined) return value;
+        if (column.type === Date || column.type === 'date')
         {
-            return value;
-        }
-
-        if (
-            column.type === Date ||
-            column.type === 'date'
-        )
-        {
-            if (value instanceof Date)
-            {
-                return value.toISOString();
-            }
+            if (value instanceof Date) return value.toISOString();
 
             return value;
         }
-
-        if (
-            column.type === Number ||
-            column.type === 'number' ||
-            column.type === 'int'
-        )
-        {
-            return Number(value);
-        }
-
-        if (
-            column.type === Boolean ||
-            column.type === 'boolean'
-        )
-        {
-            return Boolean(value);
-        }
+        if (column.type === Number || column.type === 'number' || column.type === 'int') return Number(value);
+        if (column.type === Boolean || column.type === 'boolean') return Boolean(value);
 
         return value;
     }
 
     prepareHydratedValue(value: any, column: ColumnMetadata)
     {
-        if (value === null || value === undefined)
+        if (value === null || value === undefined) return value;
+        if (column.type === Date || column.type === 'date')
         {
-            return value;
-        }
-
-        if (
-            column.type === Number ||
-            column.type === 'number' ||
-            column.type === 'int'
-        )
-        {
-            return Number(value);
-        }
-
-        if (
-            column.type === Boolean ||
-            column.type === 'boolean'
-        )
-        {
-            if (typeof value === 'boolean')
-            {
-                return value;
-            }
-
-            if (typeof value === 'string')
-            {
-                return value.toUpperCase() === 'TRUE';
-            }
-
-            return Boolean(value);
-        }
-
-        if (
-            column.type === Date ||
-            column.type === 'date'
-        )
-        {
-            if (value instanceof Date)
-            {
-                return value;
-            }
+            if (value instanceof Date) return value;
 
             const date = new Date(value);
 
-            if (!Number.isNaN(date.getTime()))
-            {
-                return date;
-            }
+            if (!Number.isNaN(date.getTime())) return date;
 
             return value;
+        }
+        if (column.type === Number || column.type === 'number' || column.type === 'int') return Number(value);
+        if (column.type === Boolean || column.type === 'boolean')
+        {
+            if (typeof value === 'boolean') return value;
+
+            if (typeof value === 'string') return value.toUpperCase() === 'TRUE';
+
+            return Boolean(value);
         }
 
         return value;
@@ -259,52 +203,14 @@ export class GoogleSheetsDriver implements Driver
         isArray?: boolean;
     }): string
     {
-        if (
-            column.type === String ||
-            column.type === 'string'
-        )
-        {
-            return 'string';
-        }
-
-        if (
-            column.type === Number ||
-            column.type === 'number'
-        )
-        {
-            return 'number';
-        }
-
-        if (column.type === 'int')
-        {
-            return 'int';
-        }
-
-        if (
-            column.type === Boolean ||
-            column.type === 'boolean'
-        )
-        {
-            return 'boolean';
-        }
-
-        if (
-            column.type === Date ||
-            column.type === 'date'
-        )
-        {
-            return 'date';
-        }
-
-        if (column.type === 'uuid')
-        {
-            return 'uuid';
-        }
-
-        if (column.type === 'enum')
-        {
-            return 'enum';
-        }
+        if (column.type === String || column.type === 'string') return 'string';
+        if (column.type === Number || column.type === 'number') return 'number';
+        if (column.type === 'int') return 'int';
+        if (column.type === Boolean || column.type === 'boolean') return 'boolean';
+        if (column.type === Date || column.type === 'date') return 'date';
+        if (column.type === 'uuid') return 'uuid';
+        if (column.type === 'enum') return 'enum';
+        if ((column.type as unknown) === Object) return 'string';
 
         return String(column.type ?? 'string');
     }

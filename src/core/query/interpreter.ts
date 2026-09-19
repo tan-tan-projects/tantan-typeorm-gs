@@ -811,10 +811,7 @@ export class GoogleSheetsQueryInterpreter
             {
                 const tableRow = row[columnMatch[1]];
 
-                if (tableRow && typeof tableRow === 'object')
-                {
-                    return (tableRow as Record<string, unknown>)[columnMatch[2]];
-                }
+                if (tableRow && typeof tableRow === 'object') return (tableRow as Record<string, unknown>)[columnMatch[2]];
 
                 return undefined;
             }
@@ -861,8 +858,7 @@ export class GoogleSheetsQueryInterpreter
              */
             if (aggregate.distinct)
             {
-                const values = rows.map((row) =>
-                    this.evaluateDistinctExpression(row, aggregate.argument))
+                const values = rows.map((row) => this.evaluateDistinctExpression(row, aggregate.argument))
                     .filter((value) => value !== null && value !== undefined);
 
                 const distinctValues = new Set(values.map((value) => JSON.stringify(value)));
@@ -881,10 +877,7 @@ export class GoogleSheetsQueryInterpreter
             {
                 const tableRow = row[tableAlias];
 
-                if (tableRow && typeof tableRow === 'object')
-                {
-                    return (tableRow as Record<string, unknown>)[column];
-                }
+                if (tableRow && typeof tableRow === 'object') return (tableRow as Record<string, unknown>)[column];
 
                 return undefined;
             }
@@ -892,8 +885,8 @@ export class GoogleSheetsQueryInterpreter
             return row[column];
         };
 
-        const values = rows.map((row) => getValue(row))
-            .filter((value): value is string | number => value !== null && value !== undefined);
+        const values = rows.map((row) => getValue(row)).filter(
+            (value): value is string | number => value !== null && value !== undefined);
 
         if (aggregate.function === 'COUNT') return values.length;
 
@@ -1007,14 +1000,10 @@ export class GoogleSheetsQueryInterpreter
             case 'condition':
                 {
                     const condition = expression.condition;
-
                     const parameters = condition.parameters.map((parameter) => resolveParameter(parameter)).flat();
 
                     return this.evaluateWhere(
-                        resolveValue(
-                            condition.tableAlias,
-                            condition.column,
-                        ),
+                        resolveValue(condition.tableAlias, condition.column),
                         condition.operator,
                         parameters,
                     );
@@ -1084,46 +1073,43 @@ export class GoogleSheetsQueryInterpreter
 
         if (!match?.[1]) return [];
 
-        return match[1]
-            .split(',')
-            .map(
-                (expression) =>
+        return match[1].split(',').map((expression) =>
+        {
+            const trimmedExpression = expression.trim();
+
+            // ORDER BY "table"."column" ASC
+            const columnMatch = trimmedExpression.match(/^"([^"]+)"\."([^"]+)"(?:\s+(ASC|DESC))?$/i);
+
+            if (columnMatch?.[1] && columnMatch[2])
+            {
+                return {
+                    tableAlias: columnMatch[1],
+                    column: columnMatch[2],
+                    direction: (columnMatch[3]?.toUpperCase() ?? 'ASC') as OrderDirection,
+                };
+            }
+
+            // ORDER BY "table_column" ASC
+            const aliasMatch = trimmedExpression.match(/^"([^"]+)"(?:\s+(ASC|DESC))?$/i);
+
+            if (aliasMatch?.[1])
+            {
+                const alias = aliasMatch[1];
+                const separatorIndex = alias.lastIndexOf('_');
+
+                if (separatorIndex > 0)
                 {
-                    const trimmedExpression = expression.trim();
+                    return {
+                        tableAlias: alias.slice(0, separatorIndex),
+                        column: alias.slice(separatorIndex + 1),
+                        direction: (aliasMatch[2]?.toUpperCase() ?? 'ASC') as OrderDirection
+                    };
+                }
+            }
 
-                    // ORDER BY "table"."column" ASC
-                    const columnMatch = trimmedExpression.match(/^"([^"]+)"\."([^"]+)"(?:\s+(ASC|DESC))?$/i);
-
-                    if (columnMatch?.[1] && columnMatch[2])
-                    {
-                        return {
-                            tableAlias: columnMatch[1],
-                            column: columnMatch[2],
-                            direction: (columnMatch[3]?.toUpperCase() ?? 'ASC') as OrderDirection,
-                        };
-                    }
-
-                    // ORDER BY "table_column" ASC
-                    const aliasMatch = trimmedExpression.match(/^"([^"]+)"(?:\s+(ASC|DESC))?$/i);
-
-                    if (aliasMatch?.[1])
-                    {
-                        const alias = aliasMatch[1];
-                        const separatorIndex = alias.lastIndexOf('_');
-
-                        if (separatorIndex > 0)
-                        {
-                            return {
-                                tableAlias: alias.slice(0, separatorIndex),
-                                column: alias.slice(separatorIndex + 1),
-                                direction: (aliasMatch[2]?.toUpperCase() ?? 'ASC') as OrderDirection
-                            };
-                        }
-                    }
-
-                    throw new GoogleSheetsParseError(`Unable to parse ORDER BY expression: ${expression}`)
-                },
-            );
+            throw new GoogleSheetsParseError(`Unable to parse ORDER BY expression: ${expression}`)
+        },
+        );
     }
 
     parsePagination(query: string): Pagination

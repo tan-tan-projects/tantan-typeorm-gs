@@ -205,32 +205,29 @@ export class GoogleSheetsQueryRunner extends BaseQueryRunner
 
             const columns = this.interpreter.parseSelectColumns(query);
 
-            let records = filteredRows
-                .map(
-                    (row) =>
+            let records = filteredRows.map((row) =>
+            {
+                const record: Record<string, unknown> = {};
+
+                for (const column of columns)
+                {
+                    /**
+                     * Literal:
+                     *
+                     * 1 AS "count"
+                     */
+                    if (/^\d+$/.test(column.column))
                     {
-                        const record: Record<string, unknown> = {};
+                        record[column.alias] = Number(column.column);
 
-                        for (const column of columns)
-                        {
-                            /**
-                             * Literal:
-                             *
-                             * 1 AS "count"
-                             */
-                            if (/^\d+$/.test(column.column))
-                            {
-                                record[column.alias] = Number(column.column);
+                        continue;
+                    }
 
-                                continue;
-                            }
+                    record[column.alias] = row[column.tableAlias]?.[column.column];
+                }
 
-                            record[column.alias] = row[column.tableAlias]?.[column.column];
-                        }
-
-                        return record;
-                    },
-                );
+                return record;
+            });
 
             /**
              * ORDER BY
