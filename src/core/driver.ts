@@ -194,31 +194,19 @@ export class GoogleSheetsDriver implements Driver
 
         if ((column.type as unknown) === Object)
         {
-            const metadata =
-                column as ColumnMetadata & {
-                    propertyType?: unknown;
-                };
+            const metadata = column as ColumnMetadata & { propertyType?: unknown; };
 
-            if (
-                metadata.propertyType === String ||
-                metadata.propertyType === 'string'
-            )
+            if (metadata.propertyType === String || metadata.propertyType === 'string')
             {
                 return String(value);
             }
 
-            if (
-                metadata.propertyType === Number ||
-                metadata.propertyType === 'number'
-            )
+            if (metadata.propertyType === Number || metadata.propertyType === 'number')
             {
                 return Number(value);
             }
 
-            if (
-                metadata.propertyType === Boolean ||
-                metadata.propertyType === 'boolean'
-            )
+            if (metadata.propertyType === Boolean || metadata.propertyType === 'boolean')
             {
                 if (typeof value === 'boolean') return value;
 
@@ -230,10 +218,7 @@ export class GoogleSheetsDriver implements Driver
                 return Boolean(value);
             }
 
-            if (
-                metadata.propertyType === Date ||
-                metadata.propertyType === 'date'
-            )
+            if (metadata.propertyType === Date || metadata.propertyType === 'date')
             {
                 if (value instanceof Date) return value;
 
