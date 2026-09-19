@@ -924,7 +924,7 @@ export class GoogleSheetsQueryInterpreter
             case '=': return this.compareValues(value, parameters[0]);
             case '!=':
             case '<>':
-                return value !== parameters[0];
+                return !this.compareValues(value, parameters[0]);
             case '>':
                 return value !== undefined &&
                     value !== null &&
@@ -1040,6 +1040,29 @@ export class GoogleSheetsQueryInterpreter
         if (left === null || left === undefined || right === null || right === undefined)
         {
             return left === right;
+        }
+
+        if (left instanceof Date && right instanceof Date)
+        {
+            return left.getTime() === right.getTime();
+        }
+
+        if (left instanceof Date && typeof right === 'string')
+        {
+            const rightDate = new Date(right);
+
+            if (Number.isNaN(rightDate.getTime())) return false;
+
+            return left.getTime() === rightDate.getTime();
+        }
+
+        if (typeof left === 'string' && right instanceof Date)
+        {
+            const leftDate = new Date(left);
+
+            if (Number.isNaN(leftDate.getTime())) return false;
+
+            return leftDate.getTime() === right.getTime();
         }
 
         if (typeof left === 'number' && typeof right === 'string')

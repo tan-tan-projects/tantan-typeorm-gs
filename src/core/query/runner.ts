@@ -106,85 +106,72 @@ export class GoogleSheetsQueryRunner extends BaseQueryRunner
 
             if (where)
             {
-                filteredRows =
-                    joinedRows.filter(
-                        (row) => this.interpreter.evaluateWhereExpression(where, (tableAlias, column) =>
+                filteredRows = joinedRows.filter((row) => this.interpreter.evaluateWhereExpression(where,
+                    (tableAlias, column) =>
+                    {
+                        const value = row[tableAlias]?.[column];
+
+                        const metadata = this.getEntityMetadata(tableAlias === from.alias ? from.table : tableAlias);
+                        const columnMetadata = metadata?.columns.find((item) => item.databaseName === column);
+
+                        if (!columnMetadata) return value;
+
+                        return this.driver.prepareHydratedValue(value, columnMetadata);
+                    },
+                    (parameterName) =>
+                    {
+                        /**
+                         * SQL numeric literal:
+                         *
+                         * IN (1)
+                         * IN (10)
+                         * IN (-1)
+                         * IN (1.5)
+                         */
+
+                        if (/^-?\d+(?:\.\d+)?$/.test(parameterName)) return Number(parameterName);
+
+                        /**
+                         * SQL string literal:
+                         *
+                         * IN ('Basuni')
+                         */
+
+                        if (/^'.*'$/.test(parameterName)) return parameterName.slice(1, -1);
+
+                        /**
+                         * ORM parameter:
+                         *
+                         * :orm_param_0
+                         */
+
+                        const spreadParameterMatch = parameterName.match(/^:?\.\.\.(.+)$/);
+
+                        if (spreadParameterMatch?.[1])
                         {
-                            const value =
-                                row[tableAlias]?.[column];
+                            const values = this.distinctParameterValues.get(spreadParameterMatch[1]);
 
-                            const metadata =
-                                this.getEntityMetadata(
-                                    tableAlias === from.alias
-                                        ? from.table
-                                        : tableAlias,
-                                );
+                            if (values !== undefined) return values;
+                        }
 
-                            const columnMetadata =
-                                metadata?.columns.find(
-                                    (item) => item.databaseName === column,
-                                );
+                        const parameterIndex = Number(parameterName.match(/\d+$/)?.[0] ?? -1);
 
-                            if (!columnMetadata)
-                            {
-                                return value;
-                            }
+                        if (Array.isArray(parameters)) return parameters[parameterIndex];
 
-                            return this.driver.prepareHydratedValue(
-                                value,
-                                columnMetadata,
-                            );
-                        },
-                            (parameterName) =>
-                            {
-                                /**
-                                 * SQL numeric literal:
-                                 *
-                                 * IN (1)
-                                 * IN (10)
-                                 * IN (-1)
-                                 * IN (1.5)
-                                 */
+                        /**
+                         * Named parameters.
+                         */
 
-                                if (/^-?\d+(?:\.\d+)?$/.test(parameterName)) return Number(parameterName);
+                        if (parameters && typeof parameters === 'object')
+                        {
+                            const parameterNameWithoutPrefix = parameterName.replace(/^:/, '');
 
-                                /**
-                                 * SQL string literal:
-                                 *
-                                 * IN ('Basuni')
-                                 */
+                            return parameters[parameterNameWithoutPrefix];
+                        }
 
-                                if (/^'.*'$/.test(parameterName)) return parameterName.slice(1, -1);
-
-                                /**
-                                 * ORM parameter:
-                                 *
-                                 * :orm_param_0
-                                 */
-
-                                const spreadParameterMatch = parameterName.match(/^:?\.\.\.(.+)$/);
-
-                                if (spreadParameterMatch?.[1])
-                                {
-                                    const values = this.distinctParameterValues.get(spreadParameterMatch[1]);
-
-                                    if (values !== undefined) return values;
-                                }
-
-                                const parameterIndex = Number(parameterName.match(/\d+$/)?.[0] ?? -1);
-
-                                if (Array.isArray(parameters)) return parameters[parameterIndex];
-
-                                /**
-                                 * Named parameters.
-                                 */
-
-                                if (parameters && typeof parameters === 'object') return parameters[parameterName];
-
-                                return undefined;
-                            },
-                        ),
-                    );
+                        return undefined;
+                    })
+                );
             }
 
             /**
