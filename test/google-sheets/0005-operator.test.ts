@@ -13,6 +13,7 @@ import
     MoreThanOrEqual,
     Not,
     PrimaryGeneratedColumn,
+    Raw,
 } from 'typeorm';
 import { Memory } from '../../src/core/memory';
 import { createGoogleSheetsDataSource, type GoogleSheetsRow } from '../../src';
@@ -35,14 +36,22 @@ describe('Query Operator', () =>
         age!: number;
     }
 
-    async function createDataSource(
-        rows: GoogleSheetsRow[] = [],
-    )
+    @Entity('query_features_events')
+    class QueryFeaturesEvent
     {
-        const client =
-            new Memory({
-                query_features_users: rows,
-            });
+        @PrimaryGeneratedColumn()
+        id!: number;
+
+        @Column({ type: 'date', nullable: true })
+        expires_at!: Date | null;
+
+        @Column()
+        name!: string;
+    }
+
+    async function createDataSource(rows: GoogleSheetsRow[] = [])
+    {
+        const client = new Memory({ query_features_users: rows });
 
         await client.insertHeaders(
             'query_features_users',
@@ -62,6 +71,39 @@ describe('Query Operator', () =>
 
                 entities: [
                     QueryFeaturesUser,
+                ],
+            });
+
+        await dataSource.initialize();
+
+        return {
+            client,
+            dataSource,
+        };
+    }
+
+    async function createEventDataSource(rows: GoogleSheetsRow[] = [])
+    {
+        const client =
+            new Memory({
+                query_features_events: rows,
+            });
+
+        await client.insertHeaders(
+            'query_features_events',
+            [
+                'id',
+                'expires_at',
+                'name',
+            ],
+        );
+
+        const dataSource =
+            createGoogleSheetsDataSource({
+                type: 'google-sheets',
+                client,
+                entities: [
+                    QueryFeaturesEvent,
                 ],
             });
 
@@ -1118,7 +1160,208 @@ describe('Query Operator', () =>
                     await dataSource.destroy();
                 }
             }
-        },
-    );
-},
-);
+        });
+
+    test(
+        'should support Raw greater than with ISO date string',
+        async () =>
+        {
+            const {
+                dataSource,
+            } =
+                await createEventDataSource([
+                    {
+                        id: 1,
+                        expires_at: '2026-09-19T09:00:00.000Z',
+                        name: 'Expired',
+                    },
+                    {
+                        id: 2,
+                        expires_at: '2026-09-19T11:00:00.000Z',
+                        name: 'Active',
+                    },
+                    {
+                        id: 3,
+                        expires_at: null,
+                        name: 'Never expires',
+                    },
+                ]);
+
+            try
+            {
+                const repository =
+                    dataSource.getRepository(
+                        QueryFeaturesEvent,
+                    );
+
+                const now =
+                    new Date(
+                        '2026-09-19T10:00:00.000Z',
+                    );
+
+                const events =
+                    await repository.find({
+                        where: {
+                            expires_at: Raw(
+                                (alias) =>
+                                    `${alias} > :now`,
+                                {
+                                    now,
+                                },
+                            ),
+                        },
+                    });
+
+                expect(events.map(
+                    event => event.id,
+                ))
+                    .toEqual([2]);
+            }
+            finally
+            {
+                if (dataSource.isInitialized)
+                {
+                    await dataSource.destroy();
+                }
+            }
+        });
+
+    test(
+        'should support Raw nullable date condition with ISO date string',
+        async () =>
+        {
+            const {
+                dataSource,
+            } =
+                await createEventDataSource([
+                    {
+                        id: 1,
+                        expires_at: null,
+                        name: 'Never expires',
+                    },
+                    {
+                        id: 2,
+                        expires_at: '2026-09-19T11:00:00.000Z',
+                        name: 'Active',
+                    },
+                    {
+                        id: 3,
+                        expires_at: '2026-09-19T09:00:00.000Z',
+                        name: 'Expired',
+                    },
+                ]);
+
+            try
+            {
+                const repository =
+                    dataSource.getRepository(
+                        QueryFeaturesEvent,
+                    );
+
+                const now =
+                    new Date(
+                        '2026-09-19T10:00:00.000Z',
+                    );
+
+                const events =
+                    await repository.find({
+                        where: {
+                            expires_at: Raw(
+                                (alias) =>
+                                    `(${alias} IS NULL OR ${alias} > :now)`,
+                                {
+                                    now,
+                                },
+                            ),
+                        },
+                    });
+
+                expect(events.map(
+                    event => event.id,
+                ))
+                    .toEqual([1, 2]);
+            }
+            finally
+            {
+                if (dataSource.isInitialized)
+                {
+                    await dataSource.destroy();
+                }
+            }
+        });
+
+    test(
+        'should support Raw BETWEEN with ISO date strings',
+        async () =>
+        {
+            const {
+                dataSource,
+            } =
+                await createEventDataSource([
+                    {
+                        id: 1,
+                        expires_at: '2026-09-19T09:59:59.999Z',
+                        name: 'Before',
+                    },
+                    {
+                        id: 2,
+                        expires_at: '2026-09-19T10:30:00.000Z',
+                        name: 'Inside',
+                    },
+                    {
+                        id: 3,
+                        expires_at: '2026-09-19T12:00:00.000Z',
+                        name: 'Boundary',
+                    },
+                    {
+                        id: 4,
+                        expires_at: '2026-09-19T12:00:00.001Z',
+                        name: 'After',
+                    },
+                ]);
+
+            try
+            {
+                const repository =
+                    dataSource.getRepository(
+                        QueryFeaturesEvent,
+                    );
+
+                const min =
+                    new Date(
+                        '2026-09-19T10:00:00.000Z',
+                    );
+
+                const max =
+                    new Date(
+                        '2026-09-19T12:00:00.000Z',
+                    );
+
+                const events =
+                    await repository.find({
+                        where: {
+                            expires_at: Raw(
+                                (alias) =>
+                                    `${alias} BETWEEN :min AND :max`,
+                                {
+                                    min,
+                                    max,
+                                },
+                            ),
+                        },
+                    });
+
+                expect(events.map(
+                    event => event.id,
+                ))
+                    .toEqual([2, 3]);
+            }
+            finally
+            {
+                if (dataSource.isInitialized)
+                {
+                    await dataSource.destroy();
+                }
+            }
+        });
+});

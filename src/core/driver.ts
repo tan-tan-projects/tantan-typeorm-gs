@@ -155,7 +155,42 @@ export class GoogleSheetsDriver implements Driver
 
     preparePersistentValue(value: any, column: ColumnMetadata)
     {
-        return value
+        if (value === null || value === undefined)
+        {
+            return value;
+        }
+
+        if (
+            column.type === Date ||
+            column.type === 'date'
+        )
+        {
+            if (value instanceof Date)
+            {
+                return value.toISOString();
+            }
+
+            return value;
+        }
+
+        if (
+            column.type === Number ||
+            column.type === 'number' ||
+            column.type === 'int'
+        )
+        {
+            return Number(value);
+        }
+
+        if (
+            column.type === Boolean ||
+            column.type === 'boolean'
+        )
+        {
+            return Boolean(value);
+        }
+
+        return value;
     }
 
     prepareHydratedValue(value: any, column: ColumnMetadata)
@@ -165,12 +200,19 @@ export class GoogleSheetsDriver implements Driver
             return value;
         }
 
-        if (column.type === Number)
+        if (
+            column.type === Number ||
+            column.type === 'number' ||
+            column.type === 'int'
+        )
         {
             return Number(value);
         }
 
-        if (column.type === Boolean)
+        if (
+            column.type === Boolean ||
+            column.type === 'boolean'
+        )
         {
             if (typeof value === 'boolean')
             {
@@ -185,14 +227,24 @@ export class GoogleSheetsDriver implements Driver
             return Boolean(value);
         }
 
-        if (column.type === Date)
+        if (
+            column.type === Date ||
+            column.type === 'date'
+        )
         {
             if (value instanceof Date)
             {
                 return value;
             }
 
-            return new Date(value);
+            const date = new Date(value);
+
+            if (!Number.isNaN(date.getTime()))
+            {
+                return date;
+            }
+
+            return value;
         }
 
         return value;
@@ -206,10 +258,47 @@ export class GoogleSheetsDriver implements Driver
         isArray?: boolean;
     }): string
     {
-        if (column.type === String) return 'string';
-        if (column.type === Number) return 'number';
-        if (column.type === Boolean) return 'boolean';
-        if (column.type === Date) return 'date';
+        if (
+            column.type === String ||
+            column.type === 'string'
+        )
+        {
+            return 'string';
+        }
+
+        if (
+            column.type === Number ||
+            column.type === 'number'
+        )
+        {
+            return 'number';
+        }
+
+        if (column.type === 'int')
+        {
+            return 'int';
+        }
+
+        if (
+            column.type === Boolean ||
+            column.type === 'boolean'
+        )
+        {
+            return 'boolean';
+        }
+
+        if (
+            column.type === Date ||
+            column.type === 'date'
+        )
+        {
+            return 'date';
+        }
+
+        if (column.type === 'uuid')
+        {
+            return 'uuid';
+        }
 
         return String(column.type ?? 'string');
     }
