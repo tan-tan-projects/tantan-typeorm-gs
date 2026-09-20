@@ -237,7 +237,19 @@ export class GoogleSheetsDriver implements Driver
 
         if (value === null || value === undefined) return value
 
-        if (columnMetadata.type === Boolean || columnMetadata.type === "boolean") return value === true ? 1 : 0
+        if (columnMetadata.type === Boolean || columnMetadata.type === "boolean")
+        {
+            if (typeof value === "boolean") return value ? "TRUE" : "FALSE"
+            if (typeof value === "number") return value !== 0 ? "TRUE" : "FALSE"
+            if (typeof value === "string")
+            {
+                const normalized = value.trim().toLowerCase()
+
+                return (normalized === "true" || normalized === "1") ? "TRUE" : "FALSE"
+            }
+
+            return value ? "TRUE" : "FALSE"
+        }
         if (columnMetadata.type === "date") return DateUtils.mixedDateToDateString(value, { utc: columnMetadata.utc })
         if (columnMetadata.type === "time") return DateUtils.mixedDateToTimeString(value)
         if (columnMetadata.type === "datetime" || columnMetadata.type === Date)
@@ -258,11 +270,24 @@ export class GoogleSheetsDriver implements Driver
     prepareHydratedValue(value: any, columnMetadata: ColumnMetadata): any
     {
         if (value === null || value === undefined)
+        {
             return columnMetadata.transformer
                 ? ApplyValueTransformers.transformFrom(columnMetadata.transformer, value)
                 : value
+        }
 
-        if (columnMetadata.type === Boolean || columnMetadata.type === "boolean") value = value ? true : false
+        if (columnMetadata.type === Boolean || columnMetadata.type === "boolean")
+        {
+            if (typeof value === "boolean") value = value
+            else if (typeof value === "number") value = value !== 0
+            else if (typeof value === "string")
+            {
+                const normalized = value.trim().toLowerCase()
+
+                value = normalized === "true" || normalized === "1"
+            }
+            else value = Boolean(value)
+        }
         if (columnMetadata.type === "datetime" || columnMetadata.type === Date)
         {
             if (value && typeof value === "string")
@@ -283,7 +308,11 @@ export class GoogleSheetsDriver implements Driver
 
         if (columnMetadata.type === "simple-array") value = DateUtils.stringToSimpleArray(value)
         if (columnMetadata.type === "simple-enum") value = DateUtils.stringToSimpleEnum(value, columnMetadata)
-        if (columnMetadata.type === Number) value = !isNaN(+value) ? parseInt(value) : value
+        if (columnMetadata.type === Number)
+        {
+            const numeric = Number(value)
+            if (!Number.isNaN(numeric)) value = numeric
+        }
         if (columnMetadata.transformer) value = ApplyValueTransformers.transformFrom(columnMetadata.transformer, value)
 
         return value
