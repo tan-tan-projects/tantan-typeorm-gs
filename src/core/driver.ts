@@ -267,6 +267,39 @@ export class GoogleSheetsDriver implements Driver
         return value
     }
 
+    private isNumericColumnType(type: ColumnType): boolean
+    {
+        return [
+            Number,
+            "number",
+            "int",
+            "integer",
+            "tinyint",
+            "smallint",
+            "mediumint",
+            "real",
+            "double",
+            "double precision",
+            "float",
+            "numeric",
+            "decimal",
+        ].includes(type as any)
+    }
+
+    private parseNumericValue(value: string): number | string
+    {
+        const trimmed = value.trim()
+
+        if (trimmed === "") return value
+        if (/^[+-]?\d+$/.test(trimmed)) return Number(trimmed)
+        if (/^[+-]?\d+\.\d+$/.test(trimmed)) return Number(trimmed)
+        if (/^[+-]?\d+,\d+$/.test(trimmed)) return Number(trimmed.replace(",", "."))
+        if (/^[+-]?\d{1,3}(?:\.\d{3})+,\d+$/.test(trimmed)) return Number(trimmed.replace(/\./g, "").replace(",", "."))
+        if (/^[+-]?\d{1,3}(?:,\d{3})+\.\d+$/.test(trimmed)) return Number(trimmed.replace(/,/g, ""))
+
+        return value
+    }
+
     prepareHydratedValue(value: any, columnMetadata: ColumnMetadata): any
     {
         if (value === null || value === undefined)
@@ -275,6 +308,8 @@ export class GoogleSheetsDriver implements Driver
                 ? ApplyValueTransformers.transformFrom(columnMetadata.transformer, value)
                 : value
         }
+
+        if (value === '') return null
 
         if (columnMetadata.type === Boolean || columnMetadata.type === "boolean")
         {
@@ -308,10 +343,9 @@ export class GoogleSheetsDriver implements Driver
 
         if (columnMetadata.type === "simple-array") value = DateUtils.stringToSimpleArray(value)
         if (columnMetadata.type === "simple-enum") value = DateUtils.stringToSimpleEnum(value, columnMetadata)
-        if (columnMetadata.type === Number || columnMetadata.type === "number")
+        if (this.isNumericColumnType(columnMetadata.type))
         {
-            const numeric = Number(value)
-            if (!Number.isNaN(numeric)) value = numeric
+            if (typeof value === "string") value = this.parseNumericValue(value)
         }
         if (columnMetadata.transformer) value = ApplyValueTransformers.transformFrom(columnMetadata.transformer, value)
 
@@ -325,7 +359,7 @@ export class GoogleSheetsDriver implements Driver
         scale?: number
     }): string
     {
-        if (column.type === Number || column.type === "number") return "integer"
+        if (column.type === Number || column.type === "number") return "number"
         if (column.type === String || column.type === "string") return "varchar"
         if (column.type === Date) return "datetime"
         if (column.type === Boolean || column.type === "boolean") return "boolean"

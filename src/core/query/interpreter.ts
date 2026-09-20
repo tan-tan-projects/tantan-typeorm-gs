@@ -695,7 +695,7 @@ export class GoogleSheetsQueryInterpreter
             };
         }
 
-        throw new GoogleSheetsParseError(`Unable to parse WHERE expression: ${expression}`)
+        throw new GoogleSheetsParseError(`Unable to parse WHERE expression: ${JSON.stringify(normalizedExpression)}`)
     }
 
     private splitLogicalExpression(expression: string, operator: 'AND' | 'OR'): string[]
@@ -705,9 +705,51 @@ export class GoogleSheetsQueryInterpreter
         let depth = 0;
         let start = 0;
 
+        let quote: '"' | "'" | '`' | null = null;
+
         for (let index = 0; index < expression.length; index++)
         {
             const character = expression[index];
+
+            // ---------------------------------------------------------------------
+            // Quoted identifier / string
+            // ---------------------------------------------------------------------
+
+            if (quote !== null)
+            {
+                if (character === quote)
+                {
+                    // SQL escaping:
+                    //
+                    // "foo""bar"
+                    // 'foo''bar'
+                    //
+                    // The second quote is part of the quoted value.
+                    if (expression[index + 1] === quote)
+                    {
+                        index++;
+                        continue;
+                    }
+
+                    quote = null;
+                }
+
+                continue;
+            }
+
+            // ---------------------------------------------------------------------
+            // Start quote
+            // ---------------------------------------------------------------------
+
+            if (character === '"' || character === "'" || character === '`')
+            {
+                quote = character;
+                continue;
+            }
+
+            // ---------------------------------------------------------------------
+            // Parentheses
+            // ---------------------------------------------------------------------
 
             if (character === '(')
             {
@@ -721,21 +763,21 @@ export class GoogleSheetsQueryInterpreter
                 continue;
             }
 
+            // Logical operators are only valid at the top level.
             if (depth !== 0) continue;
 
-            const remaining = expression.slice(index);
+            // ---------------------------------------------------------------------
+            // Logical operator
+            // ---------------------------------------------------------------------
 
+            const remaining = expression.slice(index);
             const match = remaining.match(new RegExp(`^${operator}\\b`, 'i'));
 
             if (!match) continue;
 
-            /**
-             * BETWEEN contains its own AND:
-             *
-             * id BETWEEN :min AND :max
-             *
-             * That AND is not a logical AND.
-             */
+            // ---------------------------------------------------------------------
+            // BETWEEN ... AND ...
+            // ---------------------------------------------------------------------
 
             if (operator === 'AND')
             {
@@ -744,14 +786,14 @@ export class GoogleSheetsQueryInterpreter
                 if (/\bBETWEEN\s+:[a-zA-Z_][a-zA-Z0-9_]*$/i.test(before)) continue;
             }
 
-            parts.push(expression.slice(start, index).trim(),
-            );
+            parts.push(expression.slice(start, index).trim());
 
             index += match[0].length - 1;
             start = index + 1;
         }
 
-        parts.push(expression.slice(start).trim());
+        parts.push(expression.slice(start).trim(),
+        );
 
         return parts.filter((part) => part.length > 0);
     }
