@@ -1,15 +1,17 @@
-import type {
-    ColumnType,
-    DataSource,
-    Driver,
-    EntityMetadata,
-    ObjectLiteral,
-    QueryRunner,
-    ReplicationMode,
-    Table,
-    TableColumn,
-    TableForeignKey,
-    View
+import
+{
+    DateUtils,
+    type ColumnType,
+    type DataSource,
+    type Driver,
+    type EntityMetadata,
+    type ObjectLiteral,
+    type QueryRunner,
+    type ReplicationMode,
+    type Table,
+    type TableColumn,
+    type TableForeignKey,
+    type View
 } from "typeorm";
 import type { CteCapabilities } from "typeorm/driver/types/CteCapabilities.js";
 import type { DataTypeDefaults } from "typeorm/driver/types/DataTypeDefaults.js";
@@ -23,6 +25,7 @@ import type { GoogleSheetsClient } from "./types.js";
 import { GoogleSheetsSchemaBuilder } from "./schema-builder.js";
 import { GoogleSheetsInvalidMetadataError } from "./error.js";
 import { GoogleSheetsQueryRunner } from "./query/runner.js";
+import { ApplyValueTransformers } from "typeorm/browser/util/ApplyValueTransformers.js";
 
 export class GoogleSheetsDriver implements Driver
 {
@@ -38,14 +41,57 @@ export class GoogleSheetsDriver implements Driver
     treeSupport = false;
     transactionSupport = 'none' as const;
     supportedDataTypes: ColumnType[] = [
-        'string',
-        'number',
-        'boolean',
-        'date',
-        'uuid',
-        'int',
-        'enum',
-        Object as unknown as ColumnType,
+        // Numeric
+        "int",
+        "integer",
+        "tinyint",
+        "smallint",
+        "mediumint",
+        "bigint",
+        "unsigned big int",
+        "int2",
+        "int8",
+
+        "real",
+        "double",
+        "double precision",
+        "float",
+        "numeric",
+        "decimal",
+
+        // String
+        "character",
+        "varchar",
+        "varying character",
+        "nchar",
+        "native character",
+        "nvarchar",
+        "text",
+        "clob",
+
+        // Boolean
+        "boolean",
+
+        // Date / time
+        "date",
+        "time",
+        "datetime",
+
+        // JSON
+        "json",
+        "jsonb",
+
+        // TypeORM special types
+        "simple-array",
+        "simple-json",
+        "simple-enum",
+
+        // Generic TypeORM types
+        "string",
+        "number",
+        "boolean",
+        "uuid",
+        "enum",
     ];
     supportedIsolationLevels: readonly IsolationLevel[] = [];
     supportedUpsertTypes: UpsertType[] = [];
@@ -53,9 +99,35 @@ export class GoogleSheetsDriver implements Driver
     supportedOnUpdateTypes = [];
     dataTypeDefaults: DataTypeDefaults = {};
     spatialTypes: ColumnType[] = [];
-    withLengthColumnTypes: ColumnType[] = [];
-    withPrecisionColumnTypes: ColumnType[] = [];
-    withScaleColumnTypes: ColumnType[] = [];
+    withLengthColumnTypes: ColumnType[] = [
+        "character",
+        "varchar",
+        "varying character",
+        "nchar",
+        "native character",
+        "nvarchar",
+        "text",
+        "clob",
+    ];
+    withPrecisionColumnTypes: ColumnType[] = [
+        "real",
+        "double",
+        "double precision",
+        "float",
+        "numeric",
+        "decimal",
+        "date",
+        "time",
+        "datetime",
+    ];
+    withScaleColumnTypes: ColumnType[] = [
+        "real",
+        "double",
+        "double precision",
+        "float",
+        "numeric",
+        "decimal",
+    ];
     mappedDataTypes: MappedColumnTypes = {
         createDate: Date,
         createDateDefault: 'CURRENT_TIMESTAMP',
@@ -155,128 +227,139 @@ export class GoogleSheetsDriver implements Driver
         throw new GoogleSheetsInvalidMetadataError('Unable to parse table name.');
     }
 
-    preparePersistentValue(value: any, column: ColumnMetadata)
+    preparePersistentValue(value: any, columnMetadata: ColumnMetadata): any
     {
-        if (value === null || value === undefined) return value;
-        if (column.type === Date || column.type === 'date')
+        if (columnMetadata.transformer)
+            value = ApplyValueTransformers.transformTo(
+                columnMetadata.transformer,
+                value,
+            )
+
+        if (value === null || value === undefined) return value
+
+        if (columnMetadata.type === Boolean || columnMetadata.type === "boolean") return value === true ? 1 : 0
+        if (columnMetadata.type === "date") return DateUtils.mixedDateToDateString(value, { utc: columnMetadata.utc })
+        if (columnMetadata.type === "time") return DateUtils.mixedDateToTimeString(value)
+        if (columnMetadata.type === "datetime" || columnMetadata.type === Date)
         {
-            if (value instanceof Date) return value.toISOString();
-
-            return value;
+            return DateUtils.mixedDateToUtcDatetimeString(value)
         }
-        if (column.type === Number || column.type === 'number' || column.type === 'int') return Number(value);
-        if (column.type === Boolean || column.type === 'boolean') return Boolean(value);
 
-        return value;
+        if (columnMetadata.type === "json" || columnMetadata.type === "jsonb" || columnMetadata.type === "simple-json")
+        {
+            return DateUtils.simpleJsonToString(value)
+        }
+        if (columnMetadata.type === "simple-array") return DateUtils.simpleArrayToString(value)
+        if (columnMetadata.type === "simple-enum") return DateUtils.simpleEnumToString(value)
+
+        return value
     }
 
-    prepareHydratedValue(value: any, column: ColumnMetadata)
+    prepareHydratedValue(value: any, columnMetadata: ColumnMetadata): any
     {
-        if (value === null || value === undefined) return value;
-        if (column.type === Date || column.type === 'date')
+        if (value === null || value === undefined)
+            return columnMetadata.transformer
+                ? ApplyValueTransformers.transformFrom(columnMetadata.transformer, value)
+                : value
+
+        if (columnMetadata.type === Boolean || columnMetadata.type === "boolean") value = value ? true : false
+        if (columnMetadata.type === "datetime" || columnMetadata.type === Date)
         {
-            if (value instanceof Date) return value;
+            if (value && typeof value === "string")
+            {
+                if (/^\d\d\d\d-\d\d-\d\d \d\d:\d\d/.test(value)) value = value.replace(" ", "T")
+                if (/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d\d\d)?)?$/.test(value)) value += "Z"
+            }
 
-            const date = new Date(value);
-
-            if (!Number.isNaN(date.getTime())) return date;
-
-            return value;
+            value = DateUtils.normalizeHydratedDate(value)
         }
-        if (column.type === Number || column.type === 'number' || column.type === 'int') return Number(value);
-        if (column.type === Boolean || column.type === 'boolean')
+        if (columnMetadata.type === "date") value = DateUtils.mixedDateToDateString(value, { utc: columnMetadata.utc })
+        if (columnMetadata.type === "time") value = DateUtils.mixedTimeToString(value)
+
+        if (columnMetadata.type === "json" || columnMetadata.type === "jsonb" || columnMetadata.type === "simple-json")
         {
-            if (typeof value === 'boolean') return value;
-
-            if (typeof value === 'string') return value.toUpperCase() === 'TRUE';
-
-            return Boolean(value);
-        }
-
-        if ((column.type as unknown) === Object)
-        {
-            const metadata = column as ColumnMetadata & { propertyType?: unknown; };
-
-            if (metadata.propertyType === String || metadata.propertyType === 'string')
-            {
-                return String(value);
-            }
-
-            if (metadata.propertyType === Number || metadata.propertyType === 'number')
-            {
-                return Number(value);
-            }
-
-            if (metadata.propertyType === Boolean || metadata.propertyType === 'boolean')
-            {
-                if (typeof value === 'boolean') return value;
-
-                if (typeof value === 'string')
-                {
-                    return value.toUpperCase() === 'TRUE';
-                }
-
-                return Boolean(value);
-            }
-
-            if (metadata.propertyType === Date || metadata.propertyType === 'date')
-            {
-                if (value instanceof Date) return value;
-
-                const date = new Date(value);
-
-                if (!Number.isNaN(date.getTime()))
-                {
-                    return date;
-                }
-            }
-
-            return value;
+            value = DateUtils.stringToSimpleJson(value)
         }
 
-        return value;
+        if (columnMetadata.type === "simple-array") value = DateUtils.stringToSimpleArray(value)
+        if (columnMetadata.type === "simple-enum") value = DateUtils.stringToSimpleEnum(value, columnMetadata)
+        if (columnMetadata.type === Number) value = !isNaN(+value) ? parseInt(value) : value
+        if (columnMetadata.transformer) value = ApplyValueTransformers.transformFrom(columnMetadata.transformer, value)
+
+        return value
     }
 
     normalizeType(column: {
-        type?: ColumnType | string;
-        length?: number | string;
-        precision?: number | null;
-        scale?: number;
-        isArray?: boolean;
+        type?: ColumnType
+        length?: number | string
+        precision?: number | null
+        scale?: number
     }): string
     {
-        if (column.type === String || column.type === 'string') return 'string';
-        if (column.type === Number || column.type === 'number') return 'number';
-        if (column.type === 'int') return 'int';
-        if (column.type === Boolean || column.type === 'boolean') return 'boolean';
-        if (column.type === Date || column.type === 'date') return 'date';
-        if (column.type === 'uuid') return 'uuid';
-        if (column.type === 'enum') return 'enum';
-        if ((column.type as unknown) === Object) return Object as unknown as string;
-
-        return String(column.type ?? 'string');
+        if (column.type === Number || column.type === "int") return "integer"
+        if (column.type === String) return "varchar"
+        if (column.type === Date) return "datetime"
+        if (column.type === Boolean) return "boolean"
+        if (column.type === "uuid") return "varchar"
+        if (column.type === "simple-array") return "text"
+        if (column.type === "simple-json") return "text"
+        if (column.type === "simple-enum") return "varchar"
+        return (column.type as string) || ""
     }
 
     normalizeDefault(columnMetadata: ColumnMetadata): string | undefined
     {
-        if (columnMetadata.default === undefined) return undefined;
+        const defaultValue = columnMetadata.default
 
-        return String(columnMetadata.default);
+        if (defaultValue === null || defaultValue === undefined) return undefined
+        if (typeof defaultValue === "number") return "" + defaultValue
+        if (typeof defaultValue === "boolean") return defaultValue ? "1" : "0"
+        if (typeof defaultValue === "function") return defaultValue()
+        if (typeof defaultValue === "string") return `'${defaultValue}'`
+        if (Array.isArray(defaultValue) && columnMetadata.type === "simple-enum") return `'${defaultValue.join(",")}'`
+        if (typeof defaultValue === "object")
+        {
+            const jsonString = JSON.stringify(defaultValue).replaceAll("'", "''")
+
+            if (columnMetadata.type === "jsonb") return `jsonb('${jsonString}')`
+            return `'${jsonString}'`
+        }
+
+        return `${defaultValue}`
     }
 
     normalizeIsUnique(column: ColumnMetadata): boolean
     {
-        return false;
+        return column.entityMetadata.uniques.some(
+            (uq) => uq.columns.length === 1 && uq.columns[0] === column,
+        )
     }
 
     getColumnLength(column: ColumnMetadata): string
     {
-        return '';
+        return column.length ? column.length.toString() : ""
     }
 
     createFullType(column: TableColumn): string
     {
-        return column.type;
+        let type = column.type
+        if (column.enum) return "varchar"
+        if (column.length) type += "(" + column.length + ")"
+
+        if (
+            column.precision !== null &&
+            column.precision !== undefined &&
+            column.scale !== null &&
+            column.scale !== undefined
+        )
+        {
+            type += "(" + column.precision + "," + column.scale + ")"
+        }
+
+        if (column.precision !== null && column.precision !== undefined) type += "(" + column.precision + ")"
+        if (column.isArray) type += " array"
+
+        return type
     }
 
     async obtainMasterConnection(): Promise<any>
