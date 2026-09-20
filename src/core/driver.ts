@@ -25,7 +25,7 @@ import type { GoogleSheetsClient } from "./types.js";
 import { GoogleSheetsSchemaBuilder } from "./schema-builder.js";
 import { GoogleSheetsInvalidMetadataError } from "./error.js";
 import { GoogleSheetsQueryRunner } from "./query/runner.js";
-import { ApplyValueTransformers } from "typeorm/browser/util/ApplyValueTransformers.js";
+import { ApplyValueTransformers } from "typeorm/util/ApplyValueTransformers.js";
 
 export class GoogleSheetsDriver implements Driver
 {
@@ -308,7 +308,7 @@ export class GoogleSheetsDriver implements Driver
 
         if (columnMetadata.type === "simple-array") value = DateUtils.stringToSimpleArray(value)
         if (columnMetadata.type === "simple-enum") value = DateUtils.stringToSimpleEnum(value, columnMetadata)
-        if (columnMetadata.type === Number)
+        if (columnMetadata.type === Number || columnMetadata.type === "number")
         {
             const numeric = Number(value)
             if (!Number.isNaN(numeric)) value = numeric
@@ -325,10 +325,10 @@ export class GoogleSheetsDriver implements Driver
         scale?: number
     }): string
     {
-        if (column.type === Number || column.type === "int") return "integer"
-        if (column.type === String) return "varchar"
+        if (column.type === Number || column.type === "number") return "integer"
+        if (column.type === String || column.type === "string") return "varchar"
         if (column.type === Date) return "datetime"
-        if (column.type === Boolean) return "boolean"
+        if (column.type === Boolean || column.type === "boolean") return "boolean"
         if (column.type === "uuid") return "varchar"
         if (column.type === "simple-array") return "text"
         if (column.type === "simple-json") return "text"
@@ -341,8 +341,8 @@ export class GoogleSheetsDriver implements Driver
         const defaultValue = columnMetadata.default
 
         if (defaultValue === null || defaultValue === undefined) return undefined
-        if (typeof defaultValue === "number") return "" + defaultValue
-        if (typeof defaultValue === "boolean") return defaultValue ? "1" : "0"
+        if (typeof defaultValue === "number") return String(defaultValue)
+        if (typeof defaultValue === "boolean") return defaultValue ? "TRUE" : "FALSE"
         if (typeof defaultValue === "function") return defaultValue()
         if (typeof defaultValue === "string") return `'${defaultValue}'`
         if (Array.isArray(defaultValue) && columnMetadata.type === "simple-enum") return `'${defaultValue.join(",")}'`
