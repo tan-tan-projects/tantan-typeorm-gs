@@ -1,3 +1,51 @@
+<p align="center">
+  <img
+    src="https://res.cloudinary.com/tantan-projects/image/upload/v1789912215/media/h7ci1w0t5tjfdjfmce07.jpg"
+    alt="tantan-typeorm-gs"
+    width="150"
+  />
+</p>
+
+<p align="center">
+  <strong>TypeORM driver for Google Sheets</strong>
+</p>
+
+<p align="center">
+  A TypeORM driver that allows you to use Google Sheets as a persistence layer.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/tantan-typeorm-gs">
+    <img src="https://img.shields.io/npm/v/tantan-typeorm-gs.svg" alt="npm version" />
+  </a>
+  <a href="https://www.npmjs.com/package/tantan-typeorm-gs">
+    <img src="https://img.shields.io/npm/dm/tantan-typeorm-gs.svg" alt="npm downloads" />
+  </a>
+  <a href="https://github.com/tan-tan-projects/tantan-typeorm-gs/tree/main/test">
+  <img
+    src="https://img.shields.io/badge/tests-passing-brightgreen"
+    alt="tests"
+  />
+  </a>
+  <a href="https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/tan-tan-projects/tantan-typeorm-gs.svg" alt="license" />
+  </a>
+</p>
+
+---
+
+## Installation
+
+```bash
+npm install tantan-typeorm-gs
+```
+
+Or with Bun:
+
+```bash
+bun add tantan-typeorm-gs
+```
+
 ## Documentation
 
 ### Getting Started
@@ -29,3 +77,7 @@
 - [Integration Testing](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/integration-testing.md)
 - [Development Guide](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/development.md)
 - [Contribution Guide](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/docs/contributing.md)
+
+## License
+
+This project is licensed under the [MIT License](https://github.com/tan-tan-projects/tantan-typeorm-gs/blob/main/LICENSE).
